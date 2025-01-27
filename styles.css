@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+	margin: 0;
+	font-family: Arial, sans-serif;
+}
+
+.section {
+	@apply max-w-screen-lg mx-auto text-center px-4 lg:px-0 py-8;
+}
+.section-title {
+	@apply text-2xl font-bold mb-4 text-left;
+}
+
+p {
+	@apply text-base text-left;
+}
+
+a {
+	@apply text-blue-500;
+}
+
+.math-equation {
+	@apply font-mono bg-gray-100 p-2 text-base rounded mb-4 inline-block;
+}
+
+.color-gradient {
+	/* font-size: 1.7em; /\* Adjust as needed *\/ */
+	/* margin-top: 0px; /\* Move the title higher *\/ */
+	background: hsla(283, 39%, 53%, 1);
+
+	background: linear-gradient(
+		135deg,
+		hsla(283, 39%, 53%, 1) 0%,
+		hsla(6, 78%, 57%, 1) 100%
+	);
+
+	background: -moz-linear-gradient(
+		135deg,
+		hsla(283, 39%, 53%, 1) 0%,
+		hsla(6, 78%, 57%, 1) 100%
+	);
+
+	background: -webkit-linear-gradient(
+		135deg,
+		hsla(283, 39%, 53%, 1) 0%,
+		hsla(6, 78%, 57%, 1) 100%
+	);
+
+	filter: progid: DXImageTransform.Microsoft.gradient( startColorstr="#9b59b6", endColorstr="#e74c3c", GradientType=1 );
+
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+}
+
+.wide-hyphen {
+	display: inline-block;
+	transform: scaleX(2); /* Makes it wider */
+	margin: 0 0.2em;
+}
+
+.footnote {
+	@apply relative text-xs text-blue-500 cursor-help underline;
+	top: -0.5rem;
+}
+
+.footnote::after {
+	@apply absolute bottom-full left-1/2 text-gray-800 p-2 border border-gray-300 rounded-md z-10 opacity-0 invisible transition-opacity text-base w-80;
+	content: attr(data-footnote);
+	white-space: normal;
+	word-wrap: break-word;
+	background-color: rgb(249, 245, 240);
+
+	/* Use CSS variables for dynamic positioning */
+	transform: translateX(var(--tooltip-transform, -50%));
+	left: var(--tooltip-left, 50%);
+	right: var(--tooltip-right, auto);
+}
+
+.footnote:hover::after,
+.footnote:focus::after,
+.footnote:active::after {
+	@apply opacity-100 visible;
+}
+
+.video-caption {
+	@apply mt-2 text-white font-medium;
+}
+
+.separator {
+	@apply border-t border-gray-300 my-4 flex max-w-screen-lg mx-auto;
+}
+
+sub,
+sup {
+	font-size: 70%;
+}

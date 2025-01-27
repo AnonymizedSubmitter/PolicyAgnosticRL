@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Policy Agnostic RL</title>
+		<link rel="stylesheet" href="output.css" />
+	</head>
+	<body class="font-sans">
+		<div class="section flex items-center justify-center bg-white p-8">
+			<div
+				class="intro text-center pt-0 max-w-screen-lg mx-auto overflow-visible"
+			>
+				<h1
+					class="text-4xl md:text-6xl font-bold mb-4 color-gradient md:leading-normal"
+				>
+					Policy Agnostic RL
+				</h1>
+				<h2 class="text-2xl md:text-4xl font-medium mb-6">
+					Fine-Tuning Multiple Policy Classes with Actor-Critic RL
+				</h2>
+				<p class="text-lg md:text-xl mb-2 text-center">
+					<a href="#" target="_blank">Anonymous&nbsp;Submitters</a><sup>1</sup>
+				</p>
+				<p class="text-base text-center mb-6">
+					<sup>1</sup> Anonymous Institution
+				</p>
+				<div class="flex justify-center space-x-4 mb-6">
+					<a
+						href="https://github.com/AnonymizedSubmitter/PolicyAgnosticRL"
+						class="flex items-center px-3 py-1.5 bg-gray-800 text-white text-sm rounded-full hover:bg-gray-900"
+					>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							class="h-4 w-4 mr-1"
+							viewBox="0 0 24 24"
+							fill="currentColor"
+						>
+							<path
+								d="M12 0C5.37 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.385.6.111.793-.261.793-.58 0-.286-.011-1.043-.016-2.049-3.338.726-4.042-1.612-4.042-1.612-.546-1.387-1.333-1.757-1.333-1.757-1.089-.744.083-.729.083-.729 1.205.085 1.838 1.237 1.838 1.237 1.07 1.834 2.807 1.304 3.492.997.108-.775.419-1.304.762-1.604-2.665-.305-5.466-1.332-5.466-5.93 0-1.31.469-2.381 1.236-3.221-.123-.303-.536-1.524.117-3.176 0 0 1.008-.322 3.3 1.23A11.52 11.52 0 0112 5.8c1.02.004 2.045.138 3.002.405 2.29-1.553 3.297-1.23 3.297-1.23.655 1.653.242 2.874.12 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.805 5.623-5.477 5.921.43.371.823 1.104.823 2.227 0 1.609-.015 2.907-.015 3.302 0 .321.192.695.798.578C20.565 21.796 24 17.298 24 12c0-6.627-5.373-12-12-12z"
+							/>
+						</svg>
+						Anonymized Code
+					</a>
+				</div>
+				<video
+					loop
+					muted
+					autoplay
+					playsinline
+					data-src="./data/Fig_1_animation.mp4"
+					class="figure mx-auto w-full md:w-3/4 h-auto rounded-lg"
+				>
+					<source data-src="./data/Fig_1_animation.mp4" type="video/mp4" />
+				</video>
+			</div>
+		</div>
+
+		<div class="section bg-gray-100 py-12">
+			<div class="max-w-screen-lg mx-auto text-center px-4">
+				<h3 class="text-3xl md:text-4xl font-bold mb-6">TL;DR</h3>
+				<p class="text-lg md:text-xl text-gray-700 mb-6">
+					We introduce Policy-Agnostic RL (<b>PA-RL</b>), a single method that
+					fine-tunes multiple policy classes, with varying architectures and
+					sizes. It enables sample-efficient improvement of <b>diffusion</b> and
+					<b>transformer-based autoregressive policies</b>. The core of the
+					method is a universal policy improvement step that decomposes
+					improvement into two steps: obtaining "optimized" actions, and then
+					distilling these optimized actions back into the base policy. PA-RL
+					sets a new state of the art for offline to online RL, and it
+					<b
+						>makes it possible, for the first time, to improve
+						<a href="https://openvla.github.io/" target="_blank">OpenVLA</a>, a
+						7B-parameter generalist robot policy, in the real world, and without
+						further demonstrations</b
+					>.
+				</p>
+			</div>
+		</div>
+		<div class="section">
+			<div class="motivation_rl">
+				<h2 class="section-title">
+					Motivation <span class="wide-hyphen">-</span> why RL?
+				</h2>
+				<p class="mb-2">
+					The best performing models for robotics tasks
+					<span class="wide-hyphen">-</span> large pre-trained transformers,
+					diffusion policies <span class="wide-hyphen">-</span> still perform
+					poorly on new tasks or slightly unseen conditions.
+					<b>Sample-efficient RL</b> is a recipe for improving a policy’s
+					performance cheaply and fast.
+				</p>
+				<p>
+					The <b>Actor-Critic RL</b> architecture yields fast improvement, but
+					has only been used with small, gaussian policies. Can we get the best
+					of both worlds, and improve <i>large pre-trained transformers</i> or
+					<i>diffusion policies</i> through interaction?
+				</p>
+			</div>
+		</div>
+		<div class="section">
+			<div class="motivation_actor_critic text-left">
+				<h2 class="section-title">What is the challenge?</h2>
+
+				<p class="mb-2">
+					<b
+						>The best-performing policy classes are hard to train with
+						Actor-Critic RL!</b
+					>
+				</p>
+
+				<p>
+					To see why, let's consider what happens when we switch the gaussian
+					policies normally used in Actor-Critic RL with either a Diffusion
+					Policy or an autoregressive categorical policy like OpenVLA. The
+					Critic objective will generally look something like this:
+				</p>
+				<div class="overflow-x-auto flex justify-center pt-8">
+					<p class="math-equation">
+						\[ \mathcal{L}^Q = \mathbb{E}_{s, a, s' \sim \mathcal{D}} \left[
+						\left( Q_\theta(s, a) - (r(s, a) + \gamma \hat{Q}_\theta(s',
+						\textcolor{red}{\pi_\phi (s')})) \right)^2 \right] \]
+					</p>
+				</div>
+				<p>
+					To optimize this objective, we only need to sample from the policy \(
+					\color{red} \pi_\phi \). Even for policies that are very large,
+					non-differentiable, or have different sampling mechanisms like
+					diffusion policies, we will be able to fit a critic.
+				</p>
+				<p>The Policy objective will look like this:</p>
+				<div class="overflow-x-auto flex justify-center pt-8">
+					<p class="math-equation">
+						\[ \mathcal{L}^\pi = - \mathbb{E}_{s \sim \mathcal{D}} \left[
+						Q_\theta (s, \textcolor{red}{\pi_\phi (s)}) \right] \]
+					</p>
+				</div>
+				<p>
+					Directly optimizing this requires computing \(\nabla_\phi
+					\textcolor{red}{\pi_\phi(s)}\). This quantity is undefined for
+					autoregressive categorical policies like OpenVLA, because their
+					outputs are discrete<span
+						class="footnote"
+						data-footnote="If this makes policy improvement hard, then how is autoregressive training posible to begin with? The key difference is that the cross-entropy loss is applied before the de-discretization, whereas the Actor Critic loss is applied to the continuous actions. That is why supervised learning does not have a non-differentiability problem, but Actor-Critic does."
+						>[1]</span
+					>.
+				</p>
+				<div class="flex justify-center my-4">
+					<video
+						loop
+						muted
+						autoplay
+						playsinline
+						data-src="./data/autoregressive_transformer_animation.mp4"
+						class="w-full max-w-sm h-auto my-4"
+					>
+						<source
+							data-src="./data/autoregressive_transformer_animation.mp4"
+							type="video/mp4"
+						/>
+					</video>
+				</div>
+				<p>
+					Diffusion policies, on the other hand, are fully differentiable.
+					However, back-propagating \(\nabla_\phi \textcolor{red}{\pi_\phi(s)}\)
+					through the denoising chain is slow and unstable, because it is a very
+					deep computation graph<span
+						class="footnote"
+						data-footnote="Why does this not happen when training Diffusion Policies with supervised learning? The Diffusion loss that is used for supervised learning never back-propagates through the denoising chain! Each denoising step has direct supervision."
+						>[2]</span
+					>.
+				</p>
+				<div class="flex justify-center my-4">
+					<video
+						loop
+						muted
+						autoplay
+						playsinline
+						data-src="./data/diffusion_animation.mp4"
+						class="w-full max-w-sm h-auto my-4"
+					>
+						<source
+							data-src="./data/diffusion_animation.mp4"
+							type="video/mp4"
+						/>
+					</video>
+				</div>
+				<p class="font-semibold">
+					<b>Takeaway:</b> the <i>Policy Improvement operator</i> is the
+					bottleneck for improving arbitrary policies.
+				</p>
+			</div>
+		</div>
+		<!-- Separator  -->
+		<div class="separator"></div>
+		<div class="section">
+			<div class="method text-left">
+				<h2 class="section-title">Method Overview</h2>
+
+				<p>
+					<span class="color-gradient">Policy-Agnostic RL</span> uses a
+					universal policy improvement step that bypasses the problems from
+					above by transforming <b>policy improvement</b> into
+					<b>supervised learning</b>, something most policy classes will be
+					designed to handle.
+				</p>
+
+				<p>
+					Concretely, PA-RL decomposes the policy improvement operator into 2
+					steps:
+				</p>
+				<ol
+					class="list-decimal list-inside my-4 space-y-2 pl-6 marker:font-bold"
+				>
+					<li>Obtaining "optimized actions";</li>
+					<li>Distilling the optimized actions back to the base policy</li>
+				</ol>
+
+				<img
+					class="w-3/4 max-w-md mx-auto"
+					src="./data/parl_fig.png"
+					alt="Action Optimization process"
+				/>
+				To obtain optimized actions, we first sample multiple times from the
+				base policy, then filter to only the top few action candidates according
+				to the trained critic for computational efficiency. Finally, to allow
+				for finer-grained action improvement, we take a few gradient steps in
+				the direction of value improvement
+				<i>directly on the actions</i>.
+				<p class="my-2">
+					The policy distillation step simply runs supervised learning (i.e.
+					Behavior Cloning) on the optimized actions, which makes PA-RL work
+					well on multiple policy types.
+				</p>
+				<p>
+					PA-RL can be used to replace the policy improvement step in multiple
+					RL algorithms. Our main results use PA-RL in conjunction with
+					<a href="https://nakamotoo.github.io/Cal-QL/" target="_blank"
+						>Cal-QL</a
+					>. For results with IQL and RLPD, see the paper.
+				</p>
+			</div>
+		</div>
+		<!-- Separator  -->
+		<div class="separator"></div>
+		<div class="section">
+			<div class="results text-left">
+				<h2 class="section-title">Results</h2>
+				<p>
+					We use PA-RL to
+					<b
+						>efficiently improve both Diffusion Policies and OpenVLA on a real
+						world robot for the first time</b
+					>. We improve OpenVLA <b>without any further demonstrations</b>, only
+					making use of 1 hour of zero-shot language-conditioned trials, and 40
+					minutes of online RL fine-tuning on the real robot.
+				</p>
+
+				<div class="mb-4 border-b border-gray-200 dark:border-gray-200">
+					<ul
+						class="flex flex-wrap -mb-px text-sm font-medium text-center"
+						id="eval_tabs"
+						data-tabs-toggle="#eval_tab_contents"
+					>
+						<li class="mr-2">
+							<button
+								class="inline-block p-4 border-b-4 rounded-t-lg text-gray-900"
+								id="openvla-tab"
+								data-tabs-target="#openvla"
+								type="button"
+							>
+								OpenVLA
+							</button>
+						</li>
+						<li class="mr-2">
+							<button
+								class="inline-block p-4 border-b-4 border-transparent rounded-t-lg text-gray-400 hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300"
+								id="cup-tab"
+								data-tabs-target="#cup"
+								type="button"
+							>
+								Diffusion Policy (cup task)
+							</button>
+						</li>
+						<li class="mr-2">
+							<button
+								class="inline-block p-4 border-b-4 border-transparent rounded-t-lg text-gray-400 hover:text-gray-600 hover:border-gray-300 dark:hover:text-gray-300"
+								id="pot-tab"
+								data-tabs-target="#pot"
+								type="button"
+							>
+								Diffusion Policy (pot task)
+							</button>
+						</li>
+					</ul>
+				</div>
+				<div id="eval_tab_contents">
+					<div
+						class="p-6 rounded-lg bg-gray-50 dark:bg-gray-800"
+						id="openvla"
+						aria-labelledby="openvla-tab"
+					>
+						<div class="grid grid-cols-2 gap-4 max-w-4xl mx-auto">
+							<div class="text-center">
+								<video
+									loop
+									muted
+									autoplay
+									playsinline
+									data-src="./data/openvla_og_eval.mp4"
+									class="w-full rounded-lg shadow-lg"
+								>
+									<source src="./data/openvla_og_eval.mp4" type="video/mp4" />
+									Your browser does not support the video tag.
+								</video>
+								<p class="video-caption">Zero-shot OpenVLA (40% success)</p>
+							</div>
+
+							<div class="text-center">
+								<video
+									loop
+									muted
+									autoplay
+									playsinline
+									data-src="./data/openvla_ft_eval.mp4"
+									class="w-full rounded-lg shadow-lg"
+								>
+									<source src="./data/openvla_ft_eval.mp4" type="video/mp4" />
+									Your browser does not support the video tag.
+								</video>
+								<p class="video-caption">
+									Fine-tuned OpenVLA (<span class="text-emerald-500"
+										>70% success</span
+									>)
+								</p>
+							</div>
+						</div>
+					</div>
+					<div
+						class="hidden p-6 rounded-lg bg-gray-50 dark:bg-gray-800"
+						id="cup"
+						aria-labelledby="cup-tab"
+					>
+						<div class="grid grid-cols-2 gap-4 max-w-4xl mx-auto">
+							<div class="text-center">
+								<video
+									loop
+									muted
+									autoplay
+									playsinline
+									data-src="./data/cup_ddpm_eval.mp4"
+									class="w-full rounded-lg shadow-lg"
+								>
+									<source src="./data/cup_ddpm_eval.mp4" type="video/mp4" />
+									Your browser does not support the video tag.
+								</video>
+								<p class="video-caption">BC Diffusion Policy (50% success)</p>
+							</div>
+
+							<div class="text-center">
+								<video
+									loop
+									muted
+									autoplay
+									playsinline
+									data-src="./data/cup_ft_eval.mp4"
+									class="w-full rounded-lg shadow-lg"
+								>
+									<source src="./data/cup_ft_eval.mp4" type="video/mp4" />
+									Your browser does not support the video tag.
+								</video>
+								<p class="video-caption">
+									Fine-tuned Diffusion Policy (<span class="text-emerald-500"
+										>90% success</span
+									>)
+								</p>
+							</div>
+						</div>
+					</div>
+					<div
+						class="hidden p-6 rounded-lg bg-gray-50 dark:bg-gray-800"
+						id="pot"
+						aria-labelledby="pot-tab"
+					>
+						<div class="grid grid-cols-2 gap-4 max-w-4xl mx-auto">
+							<div class="text-center">
+								<video
+									loop
+									muted
+									autoplay
+									playsinline
+									data-src="./data/pot_ddpm_eval.mp4"
+									class="w-full rounded-lg shadow-lg"
+								>
+									<source src="./data/pot_ddpm_eval.mp4" type="video/mp4" />
+									Your browser does not support the video tag.
+								</video>
+								<p class="video-caption">BC Diffusion Policy (50% success)</p>
+							</div>
+
+							<div class="text-center">
+								<video
+									loop
+									muted
+									autoplay
+									playsinline
+									data-src="./data/pot_diffusion_ft_eval.mp4"
+									class="w-full rounded-lg shadow-lg"
+								>
+									<source
+										src="./data/pot_diffusion_ft_eval.mp4"
+										type="video/mp4"
+									/>
+									Your browser does not support the video tag.
+								</video>
+								<p class="video-caption">
+									Fine-tuned Diffusion Policy (<span class="text-emerald-500"
+										>100% success</span
+									>)
+								</p>
+							</div>
+						</div>
+					</div>
+				</div>
+				<p class="mt-8 mb-6">
+					<b
+						>PA-RL significantly improves learning efficiency and asymptotic
+						performance of Cal-QL with diffusion policies.</b
+					>
+					PA-RL attains both significantly better offline and online fine-tuning
+					performance compared to other offline-to-online methods.
+				</p>
+				<img
+					class="w-full max-w-3xl mx-auto"
+					src="./data/paper_plots.png"
+					alt="Simulation results"
+				/>
+			</div>
+		</div>
+
+		<!--<script src="https://cdnjs.cloudflare.com/ajax/libs/fullPage.js/4.0.20/fullpage.min.js"></script>-->
+		<script src="script.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+	</body>
+</html>
